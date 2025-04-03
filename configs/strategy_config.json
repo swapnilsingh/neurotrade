@@ -1,0 +1,28 @@
+{
+  "strategy_id": "simple_sma_strategy",
+  "indicators": {
+    "macd": {
+      "fast_length": 12,
+      "slow_length": 26,
+      "signal_smooth": 9
+    },
+    "rsi": {
+      "length": 14,
+      "overbought": 70,
+      "oversold": 30
+    }
+  },
+  "trade_parameters": {
+    "position_size": 1000,
+    "stop_loss_pct": 0.02,
+    "take_profit_pct": 0.05
+  },
+  "slippage": 0.001,
+  "risk": {
+    "max_drawdown": 0.2,
+    "max_position_size": 0.1
+  },
+  "evaluation": {
+    "metrics": ["roi", "sharpe", "win_rate"]
+  }
+}
