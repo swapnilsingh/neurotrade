@@ -1,0 +1,12 @@
+indicators:
+  - rsi
+  - macd
+  - adx
+  - atr
+  - bollinger
+trading:
+  cooldown: 30
+  risk: medium
+oms:
+  slippage: 0.001
+  fees: 0.001
