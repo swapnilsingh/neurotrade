@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-cuda
+  namespace: neurotrade
+spec:
+  containers:
+  - name: test-cuda
+    image: 192.168.1.200:30000/neurotrade/trainer:latest
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+    env:
+      - name: LD_LIBRARY_PATH
+        value: /usr/local/nvidia/lib64:/usr/local/nvidia/lib:/usr/local/cuda/lib64:/usr/local/cuda/lib:/usr/local/cuda/lib64/stubs
+      - name: PATH
+        value: /usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    volumeMounts:
+      - name: nvidia-libs
+        mountPath: /usr/local/nvidia
+  volumes:
+    - name: nvidia-libs
+      hostPath:
+        path: /usr/local/nvidia

@@ -10,3 +10,4 @@ trading:
 oms:
   slippage: 0.001
   fees: 0.001
+reward_strategy: basic

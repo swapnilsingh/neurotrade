@@ -1,0 +1,25 @@
+# GPU-specific Dockerfile
+FROM python:3.9-slim
+
+
+WORKDIR /app
+COPY . .
+
+WORKDIR /app
+
+# Copy and install dependencies early
+COPY trainer/requirements.txt .
+RUN pip3 install --upgrade pip && pip3 install --no-cache-dir -r requirements.txt
+
+# Copy app components
+COPY rl_agent /app/rl_agent
+COPY utils /app/utils
+COPY trainer /app/trainer
+COPY configs /app/configs
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+
+
+CMD ["python3", "trainer/trainer_runner.py"]

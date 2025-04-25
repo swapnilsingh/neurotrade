@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from rl_agent.base import BaseAgent
+from rl_agent.models.state import State
 
 class DQNModel(nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -24,9 +25,10 @@ class DQNAgent(BaseAgent):
         self.model.load_state_dict(torch.load(model_path, map_location=torch.device("cpu")))
         self.model.eval()
 
-    def vote(self, state):
+    def vote(self, state: State) -> str:
         x = torch.tensor(state.indicators_vector(), dtype=torch.float32).unsqueeze(0)
         with torch.no_grad():
             q_values = self.model(x)
         action_idx = torch.argmax(q_values).item()
-        return ["BUY", "SELL", "HOLD"][action_idx]
+        signal = [1, -1, 0][action_idx]  # numeric mapping
+        return self.map_signal(signal)  # string output: "BUY", "SELL", "HOLD"

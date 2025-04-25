@@ -10,7 +10,9 @@ def run_inference(file_path="sample_ohlcv.csv", strategy_path="configs/strategy.
     config = load_strategy_config(strategy_path)
     agent = EnsembleAgent()
 
-    for _, row in df.iterrows():
+    print(f"🧠 Running inference on {len(df)} rows...")
+
+    for idx, row in df.iterrows():
         state = build_state(row, config)
         signal, votes = agent.vote(state)
 
@@ -21,11 +23,17 @@ def run_inference(file_path="sample_ohlcv.csv", strategy_path="configs/strategy.
             "equity": 1000.0,
             "reason": f"majority vote={signal}",
             "votes": votes,
-            "indicators": state.indicators,
+            "indicators": state.model_dump(include={"rsi", "macd", "bollinger", "atr", "adx", "close"}),
             "strategy_config": config,
             "model_version": "v1"
         }
+
         log_trade(trade["symbol"], trade)
+
+        # 👇 Add this line for feedback
+        print(f"[{idx}] ✅ Signal: {signal} | Votes: {votes}")
+
+    print("🎉 Inference complete.")
 
 if __name__ == "__main__":
     run_inference()

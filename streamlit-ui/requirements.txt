@@ -1,6 +1,5 @@
 pandas
-torch
 streamlit
 pyyaml
-
-coverage
+redis
+plotly

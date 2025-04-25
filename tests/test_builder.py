@@ -7,6 +7,6 @@ def test_build_state_valid():
     }
     config = {"indicators": ["rsi", "macd", "atr"]}
     state = build_state(ohlcv_row, config)
-    assert "rsi" in state.indicators
-    assert "macd" in state.indicators
+    assert isinstance(state.rsi, (float, dict))
+    assert isinstance(state.macd, (float, dict))
     assert state.timestamp == 1714023000000

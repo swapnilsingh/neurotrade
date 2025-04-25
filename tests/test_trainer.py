@@ -1,5 +1,5 @@
 import torch
-from trainer.trainer import DQNTrainer
+from trainer.trainer_runner import DQNTrainer
 from rl_agent.models.state import State
 from rl_agent.models.experience import Experience
 

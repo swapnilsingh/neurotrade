@@ -1,6 +1,7 @@
 pandas
 torch
-streamlit
 pyyaml
-
+redis
+pydantic>=2.5.3
+typing_extensions>=4.8.0
 coverage
