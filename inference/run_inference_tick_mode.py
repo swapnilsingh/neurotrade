@@ -5,6 +5,7 @@ import websockets
 import redis.asyncio as aioredis
 from datetime import datetime
 import numpy as np
+import time
 
 from rl_agent.dynamic_tick_essemble_agent import DynamicTickEnsembleAgent as EnsembleAgent
 from feature_builder.builder import build_state_from_ticks
@@ -29,6 +30,9 @@ EXPERIENCE_KEY = config["keys"]["experience"]
 SYMBOL = symbol
 WS_URL = f"wss://stream.binance.com:9443/ws/{symbol}@trade"
 
+MODEL_PATH = "/app/models/model.pt"
+MODEL_CHECK_INTERVAL = 300  # 5 minutes
+
 INITIAL_EQUITY = 1000.0
 TRADE_FEE_RATE = 0.001
 SLIPPAGE_RATE = 0.0005
@@ -41,6 +45,10 @@ async def run_inference():
     cooldown_manager = CooldownManager(enabled=True, cooldown_seconds=3)
     tick_listener = TickStreamListener(symbol=SYMBOL, max_ticks=100)
 
+    # Track model modification time
+    last_model_mtime = os.path.getmtime(MODEL_PATH) if os.path.exists(MODEL_PATH) else None
+    last_model_check_time = time.time()
+
     asyncio.create_task(tick_listener.connect())
 
     cash = INITIAL_EQUITY
@@ -51,6 +59,17 @@ async def run_inference():
     while True:
         await asyncio.sleep(0.5)
         ticks = tick_listener.get_recent_ticks()
+
+        # 🔥 Model Hot Reload Check
+        current_time = time.time()
+        if current_time - last_model_check_time >= MODEL_CHECK_INTERVAL:
+            if os.path.exists(MODEL_PATH):
+                current_mtime = os.path.getmtime(MODEL_PATH)
+                if last_model_mtime is None or current_mtime != last_model_mtime:
+                    print(f"♻️ [Inference] New model detected. Reloading model...")
+                    agent.load_model(MODEL_PATH)
+                    last_model_mtime = current_mtime
+            last_model_check_time = current_time
 
         if len(ticks) < 10:
             continue
@@ -141,8 +160,7 @@ async def run_inference():
         signal_to_action_value = {"BUY": 1, "SELL": -1, "HOLD": 0}
         mapped_action = signal_to_action_value.get(signal, 0)
 
-        # Build future state (next 5-10 ticks ahead if available)
-        future_ticks = tick_listener.get_recent_ticks()[-15:]  # try to get latest ticks after action
+        future_ticks = tick_listener.get_recent_ticks()[-15:]
 
         future_state = build_state_from_ticks(
             ticks=future_ticks,
@@ -158,7 +176,6 @@ async def run_inference():
             "next_state": list(future_state.values()),
             "done": False
         }
-
 
         await redis_conn.rpush(EXPERIENCE_KEY, json.dumps(experience))
 
