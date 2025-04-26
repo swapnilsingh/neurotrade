@@ -27,6 +27,14 @@ spec:
         name: inference
         ports:
         - containerPort: 8000
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models/   # ✅ Mount shared model folder inside container
+      volumes:
+      - name: model-storage
+        hostPath:
+          path: /mnt/ai-nas/         # ✅ Mount shared NFS folder from host
+          type: Directory
 ---
 apiVersion: v1
 kind: Service

@@ -1,4 +1,8 @@
+import os
 import numpy as np
+import torch
+
+MODEL_PATH = "/app/models/model.pt"
 
 class DynamicTickEnsembleAgent:
     def __init__(self, window_size=10, volatility_multiplier=1.5):
@@ -6,6 +10,22 @@ class DynamicTickEnsembleAgent:
         self.volatility_multiplier = volatility_multiplier
         self.last_action_forced = False
         self.recent_price_changes = []
+
+        # 🧠 Load model if available (for future extension, even though now voting is rule-based)
+        self.model = None
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.load_model()
+
+    def load_model(self):
+        if os.path.exists(MODEL_PATH):
+            try:
+                # Assuming a simple torch model structure
+                self.model = torch.load(MODEL_PATH, map_location=self.device)
+                print(f"✅ [DynamicTickEnsembleAgent] Loaded model from {MODEL_PATH}")
+            except Exception as e:
+                print(f"⚠️ [DynamicTickEnsembleAgent] Failed to load model: {e}")
+        else:
+            print(f"⚠️ [DynamicTickEnsembleAgent] Model not found at {MODEL_PATH}, continuing without model.")
 
     def update_volatility(self):
         if len(self.recent_price_changes) >= 2:
@@ -16,7 +36,7 @@ class DynamicTickEnsembleAgent:
     def vote(self, state):
         votes = []
 
-        # 🛠️ FIX: Treat 'state' as a dictionary
+        # 🛠️ State features extraction
         price_change = state.get("price_change", 0)
         momentum = state.get("momentum", 0)
 
