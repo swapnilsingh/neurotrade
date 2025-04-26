@@ -6,6 +6,7 @@ import redis.asyncio as aioredis
 from datetime import datetime
 import numpy as np
 import time
+import logging
 
 from rl_agent.dynamic_tick_essemble_agent import DynamicTickEnsembleAgent as EnsembleAgent
 from feature_builder.builder import build_state_from_ticks
@@ -16,6 +17,11 @@ from utils.system_config import load_system_config
 from tick_stream_listener import TickStreamListener
 from cooldown_manager import CooldownManager
 
+# 🧠 Setup logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("inference")
+
+# 📋 Configuration
 config = load_system_config()
 REDIS_HOST = os.getenv("REDIS_HOST", config["redis"]["host"])
 REDIS_PORT = config["redis"]["port"]
@@ -30,8 +36,7 @@ EXPERIENCE_KEY = config["keys"]["experience"]
 SYMBOL = symbol
 WS_URL = f"wss://stream.binance.com:9443/ws/{symbol}@trade"
 
-MODEL_PATH = "/app/models/model.pt"
-MODEL_CHECK_INTERVAL = 300  # 5 minutes
+MODEL_REFRESH_INTERVAL = 300  # Refresh agent every 5 minutes
 
 INITIAL_EQUITY = 1000.0
 TRADE_FEE_RATE = 0.001
@@ -45,10 +50,7 @@ async def run_inference():
     cooldown_manager = CooldownManager(enabled=True, cooldown_seconds=3)
     tick_listener = TickStreamListener(symbol=SYMBOL, max_ticks=100)
 
-    # Track model modification time
-    last_model_mtime = os.path.getmtime(MODEL_PATH) if os.path.exists(MODEL_PATH) else None
-    last_model_check_time = time.time()
-
+    logger.info(f"✅ Inference system started for symbol: {SYMBOL.upper()}")
     asyncio.create_task(tick_listener.connect())
 
     cash = INITIAL_EQUITY
@@ -56,26 +58,43 @@ async def run_inference():
     position = None
     entry_price = 0.0
 
+    last_model_refresh_time = time.time()
+    signal_counter = 0
+
     while True:
         await asyncio.sleep(0.5)
         ticks = tick_listener.get_recent_ticks()
 
-        # 🔥 Model Hot Reload Check
+        # ♻️ Always refresh agent every MODEL_REFRESH_INTERVAL
         current_time = time.time()
-        if current_time - last_model_check_time >= MODEL_CHECK_INTERVAL:
-            if os.path.exists(MODEL_PATH):
-                current_mtime = os.path.getmtime(MODEL_PATH)
-                if last_model_mtime is None or current_mtime != last_model_mtime:
-                    print(f"♻️ [Inference] New model detected. Reloading model...")
-                    agent.load_model(MODEL_PATH)
-                    last_model_mtime = current_mtime
-            last_model_check_time = current_time
+        if current_time - last_model_refresh_time >= MODEL_REFRESH_INTERVAL:
+            logger.info(f"♻️ Refreshing EnsembleAgent instance at {datetime.utcnow()}")
+            agent = EnsembleAgent(window_size=5, volatility_multiplier=1.0)
+            last_model_refresh_time = current_time
 
         if len(ticks) < 10:
             continue
 
-        current_price = ticks[-1]["price"]
-        current_timestamp = ticks[-1]["timestamp"]
+        tick = ticks[-1]
+        current_price = tick.get("price", None)
+
+        if current_price is None:
+            continue  # Skip if price missing
+
+        raw_timestamp = tick.get("timestamp", time.time())
+
+        # 🛠️ Fix: Handle millisecond timestamps
+        if raw_timestamp > 32503680000:  # > year 3000
+            raw_timestamp = raw_timestamp / 1000
+
+        current_timestamp = raw_timestamp
+
+        try:
+            timestamp_dt = datetime.utcfromtimestamp(current_timestamp)
+        except (OverflowError, OSError, ValueError):
+            logger.warning(f"⚠️ Invalid timestamp {current_timestamp}, using current time.")
+            current_timestamp = time.time()
+            timestamp_dt = datetime.utcfromtimestamp(current_timestamp)
 
         state = build_state_from_ticks(
             ticks=ticks,
@@ -129,13 +148,16 @@ async def run_inference():
                 signal = "HOLD"
                 reason = "HOLD: Not enough inventory to SELL"
 
-        equity = cash + inventory * current_price
+        # ✅ Correct Equity Calculation
+        realized_equity = cash
+        unrealized_equity = inventory * current_price
+        total_equity = realized_equity + unrealized_equity
 
         trade = {
             "timestamp": current_timestamp,
             "symbol": SYMBOL.upper(),
             "signal": signal,
-            "equity": equity,
+            "equity": total_equity,
             "reason": reason,
             "votes": votes,
             "indicators": state,
@@ -179,7 +201,9 @@ async def run_inference():
 
         await redis_conn.rpush(EXPERIENCE_KEY, json.dumps(experience))
 
-        print(f"[Signal] {current_timestamp} {signal} | {reason} | Equity: {equity:.2f} | Reward: {reward:.4f}")
+        signal_counter += 1
+        if signal_counter % 20 == 0:
+            logger.info(f"[Signal] {timestamp_dt} {signal} | {reason} | Equity: {total_equity:.2f} | Cash: {cash:.2f} | Inventory: {inventory:.6f} BTC")
 
 if __name__ == "__main__":
     asyncio.run(run_inference())
