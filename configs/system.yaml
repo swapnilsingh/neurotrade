@@ -1,5 +1,5 @@
 symbol: "btcusdt"
-interval: 3  # seconds
+interval: 3 
 max_candles: 500
 
 redis:

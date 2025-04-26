@@ -35,7 +35,9 @@ class DQNTrainer:
             next_q = self.target_model(next_state).detach()
             reward = torch.tensor([exp.reward], dtype=torch.float32).to(self.device)
             done = exp.done
-            action_idx = [1, -1, 0].index(exp.action)
+            action_map = {'BUY': 1, 'SELL': -1, 'HOLD': 0}
+            action_idx = [1, -1, 0].index(action_map[exp.action])
+
 
             if done:
                 target[0][action_idx] = reward

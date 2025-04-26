@@ -17,4 +17,4 @@ COPY configs /app/configs
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-CMD ["python", "inference/live_main.py"]
+CMD ["python", "inference/run_inference_tick_mode.py"]

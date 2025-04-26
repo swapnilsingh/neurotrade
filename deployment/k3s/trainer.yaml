@@ -30,7 +30,14 @@ spec:
         resources:
           limits:
             nvidia.com/gpu: 1
-        
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models/    # 🧠 Mount here inside the container
+      volumes:
+      - name: model-storage
+        hostPath:
+          path: /mnt/neurotrade_models/   # 🧠 Host folder (persistent storage)
+          type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service

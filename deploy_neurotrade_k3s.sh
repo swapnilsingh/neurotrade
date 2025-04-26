@@ -19,9 +19,13 @@ if [[ "$1" == "start" ]]; then
   kubectl apply -f deployment/k3s/trainer.yaml -n $NAMESPACE
   kubectl rollout status deployment/trainer -n $NAMESPACE
 
-  echo '🚀 Deploying Streamlit UI'
-  kubectl apply -f deployment/k3s/streamlit-ui.yaml -n $NAMESPACE
-  kubectl rollout status deployment/streamlit-ui -n $NAMESPACE
+  if [[ -f deployment/k3s/streamlit-ui.yaml ]]; then
+    echo '🚀 Deploying Streamlit UI'
+    kubectl apply -f deployment/k3s/streamlit-ui.yaml -n $NAMESPACE
+    kubectl rollout status deployment/streamlit-ui -n $NAMESPACE
+  else
+    echo "⚠️ Skipping Streamlit UI deployment (file not found)"
+  fi
 
   echo "✅ All Neurotrade components deployed successfully into '$NAMESPACE'!"
 
