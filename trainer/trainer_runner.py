@@ -92,8 +92,8 @@ async def run_trainer():
                     print(f"📚 Training step {step} | Loss: {loss:.4f} | Epsilon: {agent.epsilon:.4f}")
                     # 💾 Save model checkpoint every MODEL_SAVE_INTERVAL steps
                     if step % MODEL_SAVE_INTERVAL == 0:
-                        os.makedirs("models", exist_ok=True)  # make sure models/ folder exists
-                        agent.save_model("models/model.pt")
+                        os.makedirs("/app/models", exist_ok=True)  # make sure models/ folder exists
+                        agent.save_model("/app/models/model.pt")
                         print(f"💾 Saved model checkpoint at step {step}")
 
         else:

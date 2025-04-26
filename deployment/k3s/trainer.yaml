@@ -36,7 +36,7 @@ spec:
       volumes:
       - name: model-storage
         hostPath:
-          path: /mnt/neurotrade_models/   # 🧠 Host folder (persistent storage)
+          path: /mnt/ai-nas/   # 🧠 Host folder (persistent storage)
           type: DirectoryOrCreate
 ---
 apiVersion: v1
