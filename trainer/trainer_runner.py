@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import random
+import time
 import torch
 import redis.asyncio as aioredis
 import numpy as np
@@ -24,6 +25,8 @@ TARGET_UPDATE_INTERVAL = 1000
 MODEL_SAVE_INTERVAL = 500
 REPLAY_BUFFER_CAPACITY = 10000
 
+MODEL_PATH = "/app/models/model.pt"
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class ReplayBuffer:
@@ -43,7 +46,17 @@ class ReplayBuffer:
 
 async def run_trainer():
     redis_conn = aioredis.Redis(host=REDIS_HOST, port=6379, decode_responses=True)
-    agent = DQNAgent(input_dim=6,model_path="models/model.pt")
+
+    agent = None
+
+    # 🛡️ Check if model.pt exists
+    if os.path.exists(MODEL_PATH):
+        print(f"✅ [Trainer] model.pt found. Initializing Trainer from saved model...")
+        agent = DQNAgent(input_dim=6, model_path=MODEL_PATH)
+    else:
+        print(f"⚠️ [Trainer] model.pt NOT found. Starting Trainer with fresh model...")
+        agent = DQNAgent(input_dim=6)  # Start from scratch without loading
+
     replay_buffer = ReplayBuffer()
 
     TRAIN_AFTER_EXPERIENCES = 500
@@ -52,7 +65,7 @@ async def run_trainer():
 
     print("✅ Trainer started. Waiting for experiences...")
 
-    step = 0  # Added step counter
+    step = 0  # Training step counter
 
     while True:
         experience_raw = await redis_conn.lpop(EXPERIENCE_KEY)
@@ -84,20 +97,21 @@ async def run_trainer():
 
                     loss = agent.train(processed_batch)
 
-                    # ✅ Apply faster epsilon decay after every mini-train
+                    # ✅ Apply epsilon decay
                     if agent.epsilon > agent.epsilon_min:
                         agent.epsilon *= agent.epsilon_decay
 
                     step += 1
                     print(f"📚 Training step {step} | Loss: {loss:.4f} | Epsilon: {agent.epsilon:.4f}")
-                    # 💾 Save model checkpoint every MODEL_SAVE_INTERVAL steps
+
+                    # 💾 Save model every MODEL_SAVE_INTERVAL steps
                     if step % MODEL_SAVE_INTERVAL == 0:
-                        os.makedirs("/app/models", exist_ok=True)  # make sure models/ folder exists
-                        agent.save_model("/app/models/model.pt")
+                        os.makedirs("/app/models", exist_ok=True)  # Ensure folder exists
+                        agent.save_model(MODEL_PATH)
                         print(f"💾 Saved model checkpoint at step {step}")
 
         else:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.1)  # No experiences yet, wait
 
 if __name__ == "__main__":
     asyncio.run(run_trainer())
