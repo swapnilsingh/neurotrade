@@ -20,7 +20,7 @@ def build_state(ohlcv_row, config):
 
     return State(indicators=indicators)
 
-def build_state_from_ticks(ticks, current_price, entry_price, position):
+def build_state_from_ticks(ticks, current_price, entry_price, position, drawdown_pct=0.0):
     prices = [tick['price'] for tick in ticks]
     qtys = [tick['qty'] for tick in ticks]
 
@@ -40,7 +40,10 @@ def build_state_from_ticks(ticks, current_price, entry_price, position):
         "momentum": momentum,
         "avg_price": avg_price,
         "avg_qty": avg_qty,
-        "unrealized_pnl_pct": unrealized_pnl_pct   # ✅ NEW
+        "unrealized_pnl_pct": unrealized_pnl_pct,  # ✅
+        "drawdown_pct": drawdown_pct                # ✅ New feature added!
     }
+
     return state
+
 

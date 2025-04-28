@@ -20,7 +20,7 @@ class QNetwork(nn.Module):
         return self.model(x)
 
 class DQNAgent:
-    def __init__(self, input_dim=7, action_space=[1, -1, 0], device='cpu', model_path="models/model.pt"):
+    def __init__(self, input_dim=10, action_space=[1, -1, 0], device='cpu', model_path="models/model.pt"):
         self.device = torch.device(device)
         self.action_space = action_space
         self.num_actions = len(action_space)

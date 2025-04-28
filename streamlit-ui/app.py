@@ -11,18 +11,18 @@ from utils.system_config import load_system_config
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
+# 🚀 Streamlit Setup
 st.set_page_config(page_title="Neurotrade Dashboard", layout="wide")
-st.title("📊 Neurotrade Dashboard v4.0 (Tick Mode Enhanced)")
+st.title("📊 Neurotrade Dashboard v5.1 (Cash-based + Model Suggestions)")
 
 st_autorefresh(interval=10_000, limit=None, key="refresh")
 
+# 🛠️ Load config and Redis
 config = load_system_config()
 REDIS_HOST = os.getenv("REDIS_HOST", config["redis"]["host"])
 REDIS_PORT = config["redis"]["port"]
-OHLCV_KEY = config["keys"]["ohlcv"]
 SIGNAL_KEY = config["keys"]["signal"]
-EXPERIENCE_KEY = config["keys"]["experience"]
-
+SUMMARY_KEY = "trading:summary"
 
 @st.cache_resource
 def get_redis_client():
@@ -34,250 +34,132 @@ def get_redis_client():
 
 r = get_redis_client()
 
-def patch_signals(df_signals: pd.DataFrame) -> pd.DataFrame:
-    """Patch missing fields in signal dataframe dynamically for Streamlit."""
-    if df_signals.empty:
-        return df_signals
-
-    # Fix datetime
-    if 'timestamp' in df_signals.columns:
-        df_signals['datetime'] = pd.to_datetime(df_signals['timestamp'], unit="ms", errors='coerce')
-
-    # Add missing price from indicators['avg_price']
-    if 'price' not in df_signals.columns:
-        df_signals['price'] = df_signals['indicators'].apply(
-            lambda x: x.get('avg_price', None) if isinstance(x, dict) else None
-        )
-
-    # Add inventory based on quantity
-    if 'inventory' not in df_signals.columns:
-        df_signals['inventory'] = df_signals.get('quantity', 0.0)
-
-    # Add pnl based on unrealized_pnl_pct and equity
-    if 'pnl' not in df_signals.columns:
-        df_signals['pnl'] = df_signals.apply(
-            lambda row: (row['indicators'].get('unrealized_pnl_pct', 0.0) / 100) * row['equity']
-            if isinstance(row['indicators'], dict) else 0.0,
-            axis=1
-        )
-
-    return df_signals
-
-def highlight_signal(row):
-    """Highlight BUY in green and SELL in red."""
-    if row['signal'] == 'BUY':
-        return ['background-color: lightgreen'] * len(row)
-    elif row['signal'] == 'SELL':
-        return ['background-color: salmon'] * len(row)
-    else:
-        return [''] * len(row)
-
-
-@st.cache_data(ttl=30)
-def load_data():
+# 📥 Load live summary
+def load_summary():
     if r is None:
-        return pd.DataFrame(), pd.DataFrame()
+        return None
     try:
-        raw_ohlcv = r.lrange(OHLCV_KEY, 0, -1)
-        raw_signals = r.lrange(SIGNAL_KEY, 0, -1)
+        summary_data = r.get(SUMMARY_KEY)
+        if summary_data:
+            return json.loads(summary_data)
+        else:
+            return None
+    except Exception as e:
+        st.error(f"Error loading summary: {e}")
+        return None
 
-        df_ohlcv = pd.DataFrame([json.loads(row) for row in raw_ohlcv]) if raw_ohlcv else pd.DataFrame()
+# 📥 Load trade history
+def load_signals():
+    if r is None:
+        return pd.DataFrame()
+    try:
+        raw_signals = r.lrange(SIGNAL_KEY, 0, -1)
         df_signals = pd.DataFrame([json.loads(row) for row in raw_signals]) if raw_signals else pd.DataFrame()
 
-        if not df_ohlcv.empty:
-            df_ohlcv['datetime'] = pd.to_datetime(df_ohlcv['timestamp'], unit="ms", errors='coerce')
-            df_ohlcv.sort_values("datetime", inplace=True)
-
-        # 🛠️ PATCH signals safely
-        df_signals = patch_signals(df_signals)
-
-        return df_ohlcv, df_signals
-
+        if not df_signals.empty and 'timestamp' in df_signals.columns:
+            df_signals['datetime'] = pd.to_datetime(df_signals['timestamp'], unit="ms", errors='coerce')
+            df_signals.sort_values("datetime", inplace=True)
+        return df_signals
     except Exception as e:
-        st.error(f"Data loading error: {e}")
-        return pd.DataFrame(), pd.DataFrame()
+        st.error(f"Error loading signals: {e}")
+        return pd.DataFrame()
 
+summary = load_summary()
+df_signals = load_signals()
 
-df_ohlcv, df_signals = load_data()
+# 🖥️ Tabs Layout
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🚀 Live Portfolio", "📈 Equity Growth", "📋 Trade History", "📊 Signal Metrics", "🧠 Model Suggestions"])
 
-st.sidebar.header("⚙️ Filters")
-
-default_start = df_signals['datetime'].min().date() if not df_signals.empty else pd.Timestamp.today().date()
-default_end = df_signals['datetime'].max().date() if not df_signals.empty else pd.Timestamp.today().date()
-
-start_date = st.sidebar.date_input("Start Date", value=default_start)
-end_date = st.sidebar.date_input("End Date", value=default_end)
-
-start_ts = pd.Timestamp(start_date)
-end_ts = pd.Timestamp(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
-
-df_signals_filtered = df_signals[(df_signals['datetime'] >= start_ts) & (df_signals['datetime'] <= end_ts)] if not df_signals.empty else pd.DataFrame()
-
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "📈 Live Price", 
-    "📋 Trade History", 
-    "💰 Equity Curve", 
-    "🏦 Inventory Tracker", 
-    "📊 Trade PnL Histogram", 
-    "🚀 Live Metrics"
-])
-
-
+# 🚀 LIVE SUMMARY
 with tab1:
-    st.subheader("📈 Live Trading View")
+    st.subheader("🚀 Live Portfolio Status")
+    if summary:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("💵 Cash", f"${summary['cash']:,.2f}")
+        col2.metric("🪙 Inventory (BTC)", f"{summary['inventory_btc']:.6f} BTC")
+        col3.metric("₿ BTC Price", f"${summary['btc_price']:,.2f}")
 
-    if not df_signals_filtered.empty:
+        col4, col5, col6 = st.columns(3)
+        col4.metric("💰 Portfolio Value", f"${summary['portfolio_value']:,.2f}")
+        col5.metric("📈 Net Profit", f"${summary['net_profit']:,.2f}")
+        col6.metric("📈 Return %", f"{summary['return_pct']:.2f}%")
+    else:
+        st.warning("No live summary available yet.")
+
+# 📈 CASH EQUITY & PORTFOLIO CURVE
+with tab2:
+    st.subheader("📈 Equity and Portfolio Evolution")
+    if not df_signals.empty:
         fig = go.Figure()
 
-        fig.add_trace(go.Scatter(
-            x=df_signals_filtered['datetime'],
-            y=df_signals_filtered['price'],
-            mode='lines+markers',
-            name='Price',
-            line=dict(color='blue')
-        ))
+        if 'cash' in df_signals.columns:
+            fig.add_trace(go.Scatter(
+                x=df_signals['datetime'],
+                y=df_signals['cash'],
+                mode='lines',
+                name='Cash Equity',
+                line=dict(color='blue')
+            ))
 
-        buys = df_signals_filtered[df_signals_filtered['signal'] == 'BUY']
-        sells = df_signals_filtered[df_signals_filtered['signal'] == 'SELL']
-
-        fig.add_trace(go.Scatter(
-            x=buys['datetime'],
-            y=buys['price'],
-            mode='markers',
-            marker=dict(color='green', size=10, symbol='triangle-up'),
-            name='BUY Signals'
-        ))
-
-        fig.add_trace(go.Scatter(
-            x=sells['datetime'],
-            y=sells['price'],
-            mode='markers',
-            marker=dict(color='red', size=10, symbol='triangle-down'),
-            name='SELL Signals'
-        ))
+        if 'inventory' in df_signals.columns and 'price' in df_signals.columns:
+            df_signals['portfolio_value'] = df_signals['cash'] + (df_signals['inventory'] * df_signals['price'])
+            fig.add_trace(go.Scatter(
+                x=df_signals['datetime'],
+                y=df_signals['portfolio_value'],
+                mode='lines',
+                name='Total Portfolio Value',
+                line=dict(color='green')
+            ))
 
         fig.update_layout(height=600, showlegend=True)
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning("No live tick data available yet.")
+        st.info("No equity/portfolio data available yet.")
 
-
-with tab2:
-    st.subheader("📋 Detailed Trade Signals")
-    if not df_signals_filtered.empty:
-        df_show = df_signals_filtered[[
-            'datetime', 'signal', 'equity', 'price', 
-            'quantity', 'forced'
-        ]]
-        st.dataframe(df_show)
-    else:
-        st.info("No trades recorded yet.")
-
-
+# 📋 TRADE HISTORY
 with tab3:
-    st.subheader("💰 Equity Evolution")
+    st.subheader("📋 Detailed Trade Signals")
+    if not df_signals.empty:
+        expected_cols = ['datetime', 'signal', 'cash', 'inventory', 'quantity', 'forced', 'take_profit_pct', 'suggestion']
+        available_cols = [col for col in expected_cols if col in df_signals.columns]
 
-    if not df_signals_filtered.empty:
-        df_signals_filtered['net_equity'] = df_signals_filtered['equity'] + df_signals_filtered['indicators'].apply(
-            lambda x: x.get('inventory', 0.0) * x.get('close', 0.0) if isinstance(x, dict) else 0.0
-        )
+        df_show = df_signals[available_cols].copy()
 
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=df_signals_filtered['datetime'],
-            y=df_signals_filtered['equity'],
-            mode='lines',
-            name='Cash Equity',
-            line=dict(color='blue')
-        ))
-        fig.add_trace(go.Scatter(
-            x=df_signals_filtered['datetime'],
-            y=df_signals_filtered['net_equity'],
-            mode='lines',
-            name='Net Equity (Cash + Crypto)',
-            line=dict(color='green')
-        ))
-        fig.update_layout(height=500, showlegend=True)
-        st.plotly_chart(fig, use_container_width=True)
+        for col in expected_cols:
+            if col not in df_show.columns:
+                if col == 'forced':
+                    df_show[col] = False
+                elif col == 'suggestion':
+                    df_show[col] = "-"
+                else:
+                    df_show[col] = 0.0
+
+        st.dataframe(df_show, use_container_width=True)
     else:
-        st.info("No equity data available.")
+        st.info("No trade signals recorded yet.")
 
-
+# 📊 SIGNAL METRICS
 with tab4:
-    st.subheader("🏦 Inventory Over Time")
-
-    if not df_signals_filtered.empty:
-        df_signals_filtered['inventory'] = df_signals_filtered['indicators'].apply(
-            lambda x: x.get('inventory', 0.0) if isinstance(x, dict) else 0.0
-        )
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=df_signals_filtered['datetime'],
-            y=df_signals_filtered['inventory'],
-            mode='lines',
-            name='Inventory Held',
-            line=dict(color='purple')
-        ))
-        fig.update_layout(height=500, showlegend=True)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No inventory data.")
-
-with tab5:
-    st.subheader("📊 Trade Profit Histogram")
-
-    if not df_signals_filtered.empty and 'pnl' in df_signals_filtered.columns:
-        st.bar_chart(df_signals_filtered['pnl'])
-    else:
-        st.info("No trade PnL data yet.")
-
-
-with tab6:
-    st.subheader("🚀 Live Portfolio Metrics")
-
-    if not df_signals_filtered.empty:
-        # 📈 Main Metrics
-        latest = df_signals_filtered.iloc[-1]
-        equity = latest.get('equity', 0.0)
-        price = latest.get('price', 0.0) or 0.0
-        indicators = latest.get('indicators', {})
-        inventory = indicators.get('inventory', 0.0) if isinstance(indicators, dict) else 0.0
-
-        net_equity = equity + (inventory * price)
-
-        st.metric("💵 Cash Equity", f"${equity:,.2f}")
-        st.metric("🪙 Inventory BTC", f"{inventory:.6f} BTC")
-        st.metric("📈 Net Equity", f"${net_equity:,.2f}")
-
-        # 📊 Live Trade Counters
-        st.subheader("📊 Live Trade Signal Counts")
-
-        buy_count = (df_signals_filtered['signal'] == 'BUY').sum()
-        sell_count = (df_signals_filtered['signal'] == 'SELL').sum()
-        hold_count = (df_signals_filtered['signal'] == 'HOLD').sum()
+    st.subheader("📊 Trade Metrics")
+    if not df_signals.empty:
+        buy_count = (df_signals['signal'] == 'BUY').sum()
+        sell_count = (df_signals['signal'] == 'SELL').sum()
+        hold_count = (df_signals['signal'] == 'HOLD').sum()
         total_trades = buy_count + sell_count
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("📈 Total BUYs", buy_count)
-        col2.metric("📉 Total SELLs", sell_count)
-        col3.metric("✋ Total HOLDs", hold_count)
-        col4.metric("✅ Executed Trades", total_trades)
-
-        # 📋 Inventory Over Time Table
-        st.subheader("📋 Inventory Movement Timeline")
-
-        if not df_signals_filtered.empty:
-            inventory_timeline = df_signals_filtered[['datetime', 'signal', 'inventory']].copy()
-            inventory_timeline = inventory_timeline.sort_values('datetime', ascending=True)
-            inventory_timeline = inventory_timeline[inventory_timeline['inventory'] != 0]  # show only non-zero
-
-            styled_table = inventory_timeline.style.apply(highlight_signal, axis=1)
-            st.dataframe(styled_table, use_container_width=True)
-        else:
-            st.info("No inventory records available yet.")
-
+        col1.metric("✅ Executed Trades", total_trades)
+        col2.metric("📈 BUY Signals", buy_count)
+        col3.metric("📉 SELL Signals", sell_count)
+        col4.metric("✋ HOLDs", hold_count)
     else:
-        st.info("No live metrics available yet.")
+        st.info("No trades executed yet.")
 
-
-
+# 🧠 MODEL SUGGESTIONS
+with tab5:
+    st.subheader("🧠 Model Suggestions")
+    if not df_signals.empty and 'suggestion' in df_signals.columns:
+        latest_suggestion = df_signals['suggestion'].dropna().iloc[-1] if not df_signals['suggestion'].dropna().empty else "-"
+        st.info(f"Latest Model Suggestion: {latest_suggestion}")
+    else:
+        st.info("No suggestions available.")

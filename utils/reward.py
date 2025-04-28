@@ -41,46 +41,140 @@ def compute_reward(candle, signal, strategy="basic"):
 
     return reward
 
-# utils/reward.py
+def sanitize_inputs(current_price, entry_price, quantity, position):
+    """
+    Ensure all inputs are floats to prevent type errors during reward computation.
+    """
+    try:
+        current_price = float(current_price)
+    except (ValueError, TypeError):
+        current_price = 0.0
+
+    try:
+        entry_price = float(entry_price)
+    except (ValueError, TypeError):
+        entry_price = 0.0
+
+    try:
+        quantity = float(quantity)
+    except (ValueError, TypeError):
+        quantity = 0.001  # Safe small value
+
+    try:
+        position = float(position)
+    except (ValueError, TypeError):
+        position = 0.0
+
+    return current_price, entry_price, quantity, position
+
 
 def compute_reward_from_ticks(ticks, signal, quantity, current_price, entry_price, position,
-                               slippage=0.0005, trading_fee=0.001):
+                                          slippage=0.0005, trading_fee=0.001,
+                                          drawdown_penalty_factor=0.2,
+                                          volatility_threshold=0.002,  # 0.2% move
+                                          hold_penalty=-0.002,
+                                          big_move_penalty=-0.01,
+                                          bonus_multiplier=1.5):
     """
-    Reward based on profit/loss after executing action, simulating slippage and trading fee.
+    Booster Reward Function with Big Move Detector:
+    - Penalizes inactivity during big market movements.
+    - Encourages capturing volatile swings.
     """
 
-    if not ticks or signal == "HOLD":
-        return -0.001  # small penalty for inactivity to encourage trading when needed
+    # 🛡 Sanitize inputs
+    current_price, entry_price, quantity, position = sanitize_inputs(
+        current_price, entry_price, quantity, position
+    )
+
+    if not ticks:
+        return -0.001  # General penalty if no ticks available
 
     reward = 0.0
 
-    if signal == "BUY":
-        # BUY action: Penalize wrong buys if price doesn't go up
-        future_price = ticks[-1]["price"]
-        price_diff = future_price - current_price
-        gross_profit = price_diff * quantity
-        reward = gross_profit
-    elif signal == "SELL":
-        # SELL action: Reward if price drops after selling
-        future_price = ticks[-1]["price"]
-        price_diff = current_price - future_price
-        gross_profit = price_diff * quantity
-        reward = gross_profit
+    # Estimate future price
+    future_price = float(ticks[-1]["price"])
+
+    # Price change percentage
+    price_change_pct = (future_price - current_price) / current_price
+
+    # === CASE 1: HOLD signal ===
+    if signal == "HOLD":
+        reward = hold_penalty  # Penalty for inactivity
+        
+        # ➡️ If BIG move happened and agent held, punish harder
+        if abs(price_change_pct) >= volatility_threshold:
+            reward += big_move_penalty  # Add extra negative reward
+
+    # === CASE 2: BUY or SELL signal ===
     else:
-        reward = -0.001  # HOLD again small penalty
+        if signal == "BUY":
+            pnl_pct = price_change_pct
+        elif signal == "SELL":
+            pnl_pct = -price_change_pct
+        else:
+            pnl_pct = 0.0
 
-    # Simulate fee + slippage cost
-    cost = current_price * quantity * (trading_fee + slippage)
-    reward = reward - cost
+        gross_pnl = pnl_pct * quantity * current_price
+        cost = current_price * quantity * (trading_fee + slippage)
+        net_pnl = gross_pnl - cost
 
-    # Boost positive rewards, punish losses harder
+        reward = net_pnl
+
+        # ➡️ Volatility bonus if captured big move
+        if abs(price_change_pct) >= volatility_threshold and reward > 0:
+            reward *= bonus_multiplier
+
+    # ➡️ Drawdown Penalty if open position
+    if position != 0:
+        unrealized_pnl = (current_price - entry_price) * position
+        if unrealized_pnl < 0:
+            drawdown_penalty = drawdown_penalty_factor * abs(unrealized_pnl) / max(abs(entry_price), 1e-8)
+            reward -= drawdown_penalty
+
+    # ➡️ Gentle Nonlinear Amplification
     if reward > 0:
-        reward = reward ** 1.5
+        reward = reward ** 0.7
     else:
-        reward = reward * 2
+        reward = reward * 1.2
 
     return reward
 
+
+def compute_dynamic_reward(
+    previous_portfolio_value,
+    current_portfolio_value,
+    high_watermark,
+    cash_balance,
+    config=None
+) -> float:
+
+    reward = 0.0
+
+    # Parameters (or load from config later)
+    growth_scaling_factor = 10.0
+    drawdown_penalty_factor = 20.0
+    ath_bonus = 50.0
+    low_cash_threshold = 0.1  # 10% of initial cash
+    cash_penalty = 10.0
+
+    # 1. Portfolio Growth Reward
+    portfolio_growth = current_portfolio_value - previous_portfolio_value
+    reward += portfolio_growth * growth_scaling_factor
+
+    # 2. Drawdown Penalty
+    if current_portfolio_value < high_watermark:
+        drawdown = (high_watermark - current_portfolio_value) / high_watermark
+        reward -= drawdown * drawdown_penalty_factor
+
+    # 3. New All Time High Bonus
+    if current_portfolio_value > high_watermark:
+        reward += ath_bonus
+
+    # 4. Low Cash Penalty
+    if cash_balance < low_cash_threshold * previous_portfolio_value:
+        reward -= cash_penalty
+
+    return reward
 
 
 
