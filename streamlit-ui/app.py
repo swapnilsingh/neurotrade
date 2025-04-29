@@ -115,7 +115,7 @@ tabs = st.tabs([
 # Load data
 data = fetch_data()
 
-# Trading Signals Tab
+# Trading Signals Tab (with buy/sell markers)
 with tabs[0]:
     if data.get("signals_df") is not None and not data["signals_df"].empty:
         df = data["signals_df"]
@@ -128,30 +128,78 @@ with tabs[0]:
         cols[2].metric("Model", latest.get('model_version', 'v2'))
         cols[3].metric("Confidence", f"{latest.get('ind_band_position', 0)*100:.1f}%")
         
-        # Visualizations
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.subheader("Price Action")
-            if 'price' in df.columns:
-                st.line_chart(df.set_index('datetime')['price'])
+        # Price chart with buy/sell markers
+        st.subheader("Live Price Action with Signals")
+        fig = go.Figure()
         
-        with col2:
-            st.subheader("Signal Distribution")
-            if 'signal' in df.columns:
-                st.bar_chart(df['signal'].value_counts())
+        # Price line
+        fig.add_trace(go.Scatter(
+            x=df['datetime'],
+            y=df['price'],
+            mode='lines',
+            name='Price',
+            line=dict(color='#1f77b4', width=2)
+        ))
         
-        # Indicator analysis
-        st.subheader("Technical Indicators")
-        indicator_cols = [c for c in df.columns if c.startswith('ind_')]
-        if indicator_cols:
-            selected_indicator = st.selectbox("Choose indicator", indicator_cols)
-            st.line_chart(df.set_index('datetime')[selected_indicator])
-
+        # Buy signals
+        buys = df[df['signal'] == 'BUY']
+        if not buys.empty:
+            fig.add_trace(go.Scatter(
+                x=buys['datetime'],
+                y=buys['price'],
+                mode='markers',
+                name='BUY',
+                marker=dict(
+                    symbol='triangle-up',
+                    size=10,
+                    color='#2ca02c',
+                    line=dict(width=2, color='DarkSlateGrey')
+            )))
+        
+        # Sell signals
+        sells = df[df['signal'] == 'SELL']
+        if not sells.empty:
+            fig.add_trace(go.Scatter(
+                x=sells['datetime'],
+                y=sells['price'],
+                mode='markers',
+                name='SELL',
+                marker=dict(
+                    symbol='triangle-down',
+                    size=10,
+                    color='#d62728',
+                    line=dict(width=2, color='DarkSlateGrey')
+            )))
+        
+        fig.update_layout(
+            height=500,
+            xaxis_title='Time',
+            yaxis_title='Price (USD)',
+            hovermode='x unified',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Additional signal stats
+        st.subheader("Signal Statistics")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Buy Signals", len(buys))
+        col2.metric("Total Sell Signals", len(sells))
+        col3.metric("Signal Frequency", 
+                   f"{len(df)/((df['datetime'].max() - df['datetime'].min()).total_seconds()/3600):.1f}/hour" 
+                   if len(df) > 1 else "N/A")
+        
     else:
         st.warning("No trading signals found")
 
 # Portfolio Tab
-# Portfolio Tab (Enhanced Performance Analytics)
+# Portfolio Tab (with buy/sell counts)
 with tabs[1]:
     summary = data.get("summary", {})
     signals_df = data.get("signals_df", pd.DataFrame())
@@ -166,73 +214,54 @@ with tabs[1]:
         cols[2].metric("Current Cash", f"${summary.get('cash', 0):,.2f}")
         cols[3].metric("BTC Holdings", f"{summary.get('inventory_btc', 0):,.6f}")
         
-        # Equity Curve Visualization
+        # Equity Curve
         if 'portfolio_value' in signals_df.columns:
             st.subheader("Equity Curve")
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=signals_df['datetime'],
-                y=signals_df['portfolio_value'],
-                mode='lines',
-                name='Portfolio Value',
-                line=dict(color='#1f77b4')
-            ))
-            fig.update_layout(height=400, xaxis_title='Date', yaxis_title='Value')
-            st.plotly_chart(fig, use_container_width=True)
+            st.line_chart(signals_df.set_index('datetime')['portfolio_value'])
         
-        # Trade Performance Metrics
+        # Trade Statistics
         if not signals_df.empty and 'signal' in signals_df.columns:
-            st.subheader("Trade Statistics")
+            st.subheader("Trade Execution Stats")
             
-            # Calculate trade metrics
+            # Calculate trade counts
             trades = signals_df[signals_df['signal'].isin(['BUY', 'SELL'])]
-            total_trades = len(trades)
-            winning_trades = len(trades[trades['ind_drawdown_pct'] > 0])  # Using drawdown as profit proxy
+            buy_count = len(trades[trades['signal'] == 'BUY'])
+            sell_count = len(trades[trades['signal'] == 'SELL'])
+            total_trades = buy_count + sell_count
             
-            # Metrics columns
-            stat_cols = st.columns(5)
-            stat_cols[0].metric("Total Trades", total_trades)
-            stat_cols[1].metric("Win Rate", 
-                               f"{(winning_trades/total_trades)*100:.1f}%" if total_trades > 0 else "N/A",
-                               help="Percentage of profitable trades")
-            stat_cols[2].metric("Avg Profit", 
-                               f"{trades['ind_drawdown_pct'].mean()*100:.2f}%" if total_trades > 0 else "N/A")
-            stat_cols[3].metric("Max Drawdown", 
-                               f"{signals_df['ind_drawdown_pct'].min()*100:.2f}%")
-            stat_cols[4].metric("Sharpe Ratio", 
-                               f"{calculate_sharpe(signals_df):.2f}" if not signals_df.empty else "N/A",
-                               help="Risk-adjusted returns metric")
+            # Create two rows of metrics
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total Trades", total_trades)
+            col2.metric("Buy Orders", buy_count)
+            col3.metric("Sell Orders", sell_count)
+            col4.metric("Win Rate", 
+                       f"{(len(trades[trades['ind_drawdown_pct'] > 0]))/total_trades*100:.1f}%" 
+                       if total_trades > 0 else "N/A")
             
-            # Trade Signal Distribution
-            st.subheader("Signal Performance")
-            col1, col2 = st.columns(2)
-            with col1:
-                if not trades.empty:
-                    fig = px.pie(
-                        trades,
-                        names='signal',
-                        values='price',
-                        hole=0.4,
-                        color_discrete_sequence=['#2ca02c', '#d62728']
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
+            col5, col6, col7, col8 = st.columns(4)
+            col5.metric("Avg Hold Time", "N/A")  # Add duration calculation if available
+            col6.metric("Avg Profit", f"{trades['ind_drawdown_pct'].mean()*100:.2f}%" 
+                        if total_trades > 0 else "N/A")
+            col7.metric("Max Drawdown", f"{signals_df['ind_drawdown_pct'].min()*100:.2f}%")
+            col8.metric("Sharpe Ratio", f"{calculate_sharpe(signals_df):.2f}")
             
-            with col2:
-                if 'price' in trades.columns:
-                    st.metric("Avg Buy Price", 
-                             f"${trades[trades['signal'] == 'BUY']['price'].mean():,.2f}" 
-                             if any(trades['signal'] == 'BUY') else "N/A")
-                    st.metric("Avg Sell Price", 
-                             f"${trades[trades['signal'] == 'SELL']['price'].mean():,.2f}" 
-                             if any(trades['signal'] == 'SELL') else "N/A")
+            # Buy/Sell Price Comparison
+            st.subheader("Execution Prices")
+            price_col1, price_col2 = st.columns(2)
+            if buy_count > 0:
+                price_col1.metric("Average Buy Price", 
+                                 f"${trades[trades['signal'] == 'BUY']['price'].mean():,.2f}")
+            if sell_count > 0:
+                price_col2.metric("Average Sell Price", 
+                                  f"${trades[trades['signal'] == 'SELL']['price'].mean():,.2f}")
         
-        # Advanced Risk Metrics
+        # Risk Metrics
         st.subheader("Risk Analysis")
         risk_cols = st.columns(3)
         risk_cols[0].metric("Volatility (24h)", 
                            f"{signals_df['price'].pct_change().std()*100:.2f}%" 
                            if not signals_df.empty else "N/A")
-        risk_cols[1].metric("Value at Risk (95%)", 
+        risk_cols[1].metric("Value at Risk", 
                            f"{calculate_var(signals_df):.2f}%" 
                            if not signals_df.empty else "N/A")
         risk_cols[2].metric("Sortino Ratio", 
@@ -240,10 +269,10 @@ with tabs[1]:
                            if not signals_df.empty else "N/A")
         
         # ROI Breakdown
-        st.subheader("ROI Composition")
+        st.subheader("P&L Composition")
         roi_cols = st.columns(2)
-        roi_cols[0].metric("Realized P&L", f"${summary.get('net_profit', 0):,.2f}")
-        roi_cols[1].metric("Unrealized P&L", 
+        roi_cols[0].metric("Realized Profit", f"${summary.get('net_profit', 0):,.2f}")
+        roi_cols[1].metric("Unrealized Profit", 
                           f"${summary.get('portfolio_value', 0) - summary.get('cash', 0) - summary.get('net_profit', 0):,.2f}")
     else:
         st.info("Portfolio summary unavailable")
