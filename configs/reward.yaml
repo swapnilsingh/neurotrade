@@ -1,0 +1,39 @@
+reward:
+  # 📉 Base Penalties
+  hold_penalty_base: -0.0015                # Penalty for taking no action (HOLD)
+  big_move_penalty_base: -0.015              # Extra penalty if missed a big move
+  
+  # 🚀 Positive Bonuses
+  bonus_multiplier_base: 2.0                 # Bonus multiplier when capturing big moves
+  tiny_profit_bonus: 0.002                   # Reward even for small profitable exits
+  early_exit_penalty: 1.0                    # Penalty for exiting too early (optional use)
+
+  # ⚠️ Risk Management Penalties
+  drawdown_penalty_factor: 0.3               # Penalize portfolio drawdowns
+  low_cash_penalty: 10.0                     # Penalize if cash balance too low (e.g., overexposed)
+  inventory_overload_penalty: 0.02           # Penalize if too much BTC exposure (>60%)
+
+  # 📈 Volatility-Awareness Parameters
+  max_volatility_threshold: 0.01             # Max volatility threshold (1% move cap)
+  min_volatility_threshold: 0.001            # Min volatility threshold (0.1% noise floor)
+  
+  # 💵 Trading Costs Simulation
+  slippage_penalty_rate: 0.0005              # Slippage cost rate (0.05% assumed slippage)
+  trading_fee_rate: 0.001                    # Exchange fee cost (e.g., Binance ~0.1%)
+
+  # 🎯 Reward Scaling
+  positive_reward_power: 0.8                 # Positive reward smoothing (root power)
+  negative_reward_amplification: 1.5         # Negative reward penalty multiplier
+
+  # 🧠 Adaptive Behavior
+  volatility_dynamic_bonus_factor: 5.0       # How much bonus scales with volatility (big movers)
+  volatility_dynamic_penalty_factor: 5.0     # How much penalty scales with volatility during hold
+
+  # 📈 Experience Replay Parameters (Optional, For Future Auto-Tuning)
+  experience_replay_min_size: 500             # How many experiences before starting training
+  experience_replay_batch_size: 64            # Minibatch size
+  experience_replay_steps_per_update: 3       # How many minibatches per step
+
+  # 🧹 Misc
+  penalty_tiny_sell_threshold: 0.001          # Tiny realized sell profits below this penalized
+  penalty_tiny_sell_value: 0.001              # Amount of penalty for tiny profits
