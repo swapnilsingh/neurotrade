@@ -39,7 +39,7 @@ class InferenceRunner:
         self.evaluator = EvaluatorAgent(short_window=10, long_window=100)
         self.reward_agent = RewardAgent(self.evaluator, use_dynamic_volatility=True)
 
-        self.INITIAL_CASH = 500.0
+        self.INITIAL_CASH = 1000.0
         self.TRADE_FEE_RATE = 0.001
         self.SLIPPAGE_RATE = 0.0005
 
