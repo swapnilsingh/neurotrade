@@ -1,0 +1,11 @@
+logger_name: SignalDecider
+log_level: DEBUG
+
+action_space:
+  - BUY
+  - SELL
+  - HOLD
+
+default_dynamic_quantity: 0.001
+default_take_profit: 0.01
+fallback_action: HOLD

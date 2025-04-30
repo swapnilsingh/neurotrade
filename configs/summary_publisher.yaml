@@ -1,0 +1,5 @@
+initial_cash: 1000.0
+keys:
+  summary: "trading:summary"
+publish_interval: 1  
+log_level: DEBUG

@@ -1,0 +1,7 @@
+agents:
+  - RSI
+  - MACD
+  - PPO
+aggregation_method: "majority_vote"
+confidence_threshold: 0.6
+log_level: DEBUG

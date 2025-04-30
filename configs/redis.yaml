@@ -1,0 +1,6 @@
+logger_name: RedisClientFactory
+log_level: INFO
+
+host: redis
+port: 6379
+decode_responses: true

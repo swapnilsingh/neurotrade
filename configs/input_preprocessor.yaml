@@ -1,0 +1,4 @@
+logger_name: InputPreprocessor
+log_level: DEBUG
+
+default_dynamic_quantity: 0.001

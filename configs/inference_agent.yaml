@@ -1,0 +1,8 @@
+logger_name: InferenceAgent
+log_level: INFO
+
+model_path: models/model.pt
+refresh_interval: 30
+device: cpu
+
+fallback_tensor: [0.0, 0.0, 0.0]

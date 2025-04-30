@@ -1,0 +1,4 @@
+fast_period: 12
+slow_period: 26
+signal_period: 9
+log_level: DEBUG

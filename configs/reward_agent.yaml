@@ -1,0 +1,7 @@
+logger_name: RewardAgent
+log_level: DEBUG
+
+use_dynamic_volatility: true
+exploration_bonus: 0.001
+default_reward_bonus_booster: 1.0
+default_penalty_aggressiveness: 1.0

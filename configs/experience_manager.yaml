@@ -1,0 +1,8 @@
+symbol: btcusdt
+keys:
+  experience: "experience_queue"
+  signal: "signal_history:{symbol}"
+
+model_version: "v2"
+max_signal_history: 1000
+log_level: DEBUG

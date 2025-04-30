@@ -1,0 +1,19 @@
+symbol: "btcusdt"
+interval: 1
+initial_cash: 1000.0
+trade_fee_rate: 0.001
+slippage_rate: 0.0005
+cooldown_seconds: 2
+tick_buffer_size: 100
+min_ticks_for_state: 3
+max_candles: 500
+
+cooldown:
+  enabled: true
+
+keys:
+  experience: "experience_queue"
+  signal: "signal_history:{symbol}"
+  summary: "trading:summary"
+
+log_level: DEBUG

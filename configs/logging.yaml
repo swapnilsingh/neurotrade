@@ -1,0 +1,43 @@
+version: 1
+disable_existing_loggers: False
+formatters:
+  standard:
+    format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: standard
+    level: DEBUG
+    stream: ext://sys.stdout
+loggers:
+  InferenceRunner:
+    level: INFO
+    handlers: [console]
+    propagate: False
+  DynamicTickEnsembleAgent:
+    level: DEBUG
+    handlers: [console]
+    propagate: False
+  RewardAgent:
+    level: DEBUG
+    handlers: [console]
+    propagate: False
+  EvaluatorAgent:
+    level: INFO
+    handlers: [console]
+    propagate: False
+  Trainer:
+    level: DEBUG
+    handlers: [console]
+    propagate: False
+  StreamlitUI:
+    level: INFO
+    handlers: [console]
+    propagate: False
+  MetaStrategyAgent:
+    level: DEBUG
+    handlers: [console]
+    propagate: False
+root:
+  level: WARNING
+  handlers: [console]

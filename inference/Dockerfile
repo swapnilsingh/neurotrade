@@ -1,20 +1,21 @@
 FROM python:3.11-slim
 
+# Set working directory
 WORKDIR /app
 
-# Install dependencies early to leverage cache
+# Install Python dependencies early to leverage Docker cache
 COPY ./inference/requirements.txt .
-
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
-# Copy source code and config
-COPY rl_agent /app/rl_agent
-COPY utils /app/utils
+# Copy only the relevant modules for inference
 COPY inference /app/inference
-COPY feature_builder /app/feature_builder
+COPY utils /app/utils
+COPY core /app/core
 COPY configs /app/configs
 
+# Environment setup
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-CMD ["python", "inference/run_inference_tick_mode.py"]
+# Updated default command
+CMD ["python", "-u", "inference/main.py"]

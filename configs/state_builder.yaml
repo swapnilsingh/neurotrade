@@ -1,0 +1,4 @@
+logger_name: StateBuilder
+log_level: INFO
+
+trade_duration_sec: 10.0

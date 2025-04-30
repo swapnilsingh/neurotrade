@@ -1,0 +1,11 @@
+batch_size: 32
+gamma: 0.99
+epsilon_start: 1.0
+epsilon_min: 0.05
+epsilon_decay: 0.995
+train_after_experiences: 500
+mini_batch_size: 64
+mini_batch_train_steps: 3
+model_save_interval: 500
+model_path: "/app/models/model.pt"
+log_level: DEBUG

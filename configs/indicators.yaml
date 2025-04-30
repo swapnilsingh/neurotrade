@@ -1,0 +1,28 @@
+indicators:
+  - name: RSIIndicator
+    class: core.indicators.rsi_indicator.RSIIndicator
+    params:
+      window: 14
+
+  - name: MACDIndicator
+    class: core.indicators.macd_indicator.MACDIndicator
+    params:
+      fast_period: 12
+      slow_period: 26
+      signal_period: 9
+
+  - name: ADXIndicator
+    class: core.indicators.adx_indicator.ADXIndicator
+    params:
+      window: 14
+
+  - name: ATRIndicator
+    class: core.indicators.atr_indicator.ATRIndicator
+    params:
+      window: 14
+
+  - name: BollingerBandsIndicator
+    class: core.indicators.bollinger_indicator.BollingerBandsIndicator
+    params:
+      window: 20
+      num_std: 2

@@ -1,0 +1,5 @@
+logger_name: CooldownManager
+log_level: INFO
+
+enabled: true
+cooldown_seconds: 2

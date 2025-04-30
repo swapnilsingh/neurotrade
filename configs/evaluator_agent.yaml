@@ -1,0 +1,5 @@
+logger_name: EvaluatorAgent
+log_level: DEBUG
+
+short_window: 10
+long_window: 100

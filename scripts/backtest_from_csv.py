@@ -1,6 +1,6 @@
 import pandas as pd
 from rl_agent.ensemble_agent import EnsembleAgent
-from feature_builder.builder import build_state
+from utils.builder import build_state
 from feature_builder.strategy_loader import load_strategy_config
 from executor.exchange_executor import PaperExecutor
 from utils.trade_logger import log_trade

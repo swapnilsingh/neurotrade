@@ -1,0 +1,6 @@
+logger_name: ModelLoader
+log_level: INFO
+
+model_path: models/model.pt
+output_dim: 3
+hidden_layers: [128, 128]
