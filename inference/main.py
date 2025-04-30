@@ -1,22 +1,6 @@
-"""
-main.py — Inference Orchestration Entry Point
-
-This script is responsible for:
-✅ Connecting to the live Binance WebSocket stream (via TickStreamListener)
-✅ Building live market state from tick data (via StateBuilder)
-✅ Delegating trading decisions to InferenceAgent (Q-network-based signal generator)
-✅ Executing trades using TradeExecutor
-✅ Evaluating trade outcomes via RewardAgent and RewardEvaluator
-✅ Logging trades to Redis and maintaining performance summary (via SummaryPublisher)
-✅ Managing trade cooldowns and retry intervals
-
-All internal logic is modular and driven by configuration:
-- Model loading, input preprocessing, and action decoding are handled by InferenceAgent
-- Configs are injected via @inject_config decorators
-- Logs are tagged via @inject_logger decorators
-"""
-
 import asyncio
+import json
+import logging
 from core.decorators.decorators import inject_logger
 from utils.redis_factory import RedisClientFactory
 from inference.inference_agent import InferenceAgent
@@ -28,17 +12,16 @@ from inference.cooldown_manager import CooldownManager
 from inference.tick_processor import TickProcessor
 from inference.state_builder import StateBuilder
 from inference.trade_executor import TradeExecutor
-from inference.experience_manager import ExperienceManager
 from inference.summary_publisher import SummaryPublisher
 from inference.state_tracker import StateTracker
-import logging
+from core.experience.experience_writer import ExperienceWriter
+from utils.trade_logger import log_trade
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[logging.StreamHandler()]
 )
-
 
 @inject_logger()
 class InferenceRunner:
@@ -53,10 +36,10 @@ class InferenceRunner:
         self.cooldown_manager = CooldownManager()
         self.state_tracker = StateTracker()
         self.tick_processor = TickProcessor(self.tick_listener)
-        self.state_builder = StateBuilder(self.evaluator, self.state_tracker,self.tick_listener)
+        self.state_builder = StateBuilder(self.evaluator, self.state_tracker, self.tick_listener)
         self.trade_executor = TradeExecutor(self.state_tracker)
         self.reward_evaluator = RewardEvaluator(self.reward_agent, self.tick_listener, self.state_tracker)
-        self.experience_manager = ExperienceManager(self.redis_conn)
+        self.experience_writer = ExperienceWriter(self.redis_conn)
         self.summary_publisher = SummaryPublisher(self.redis_conn, self.state_tracker)
 
         self.logger.info(f"✅ InferenceRunner initialized for {self.symbol.upper()}")
@@ -91,13 +74,33 @@ class InferenceRunner:
         reward = self.reward_evaluator.compute(current_price, signal, qty)
         future_state = self.state_builder.build_future()
 
-        await self.experience_manager.push(
-            state, future_state, qty, signal, reward,
-            ts, reason, tp_pct, suggestion, current_price
+        await self.experience_writer.push(
+            state=list(state.values()),
+            next_state=list(future_state.values()),
+            action={"BUY": 1, "SELL": -1, "HOLD": 0}.get(signal, 0),
+            reward=reward,
+            done=False,
+            ts=ts,
+            reason=reason
         )
 
-        await self.summary_publisher.publish(current_price, ts)
+        trade = {
+            "timestamp": int(ts),
+            "signal": signal,
+            "price": current_price,
+            "quantity": qty,
+            "reason": reason,
+            "model_version": self.experience_writer.model_version,
+            "take_profit_pct": tp_pct,
+            "suggestion": suggestion,
+            "indicators": state
+        }
 
+        log_trade("BTCUSDT", trade)
+        await self.redis_conn.rpush(self.experience_writer.signal_key, json.dumps(trade))
+        await self.redis_conn.ltrim(self.experience_writer.signal_key, -self.experience_writer.max_signal_history, -1)
+
+        await self.summary_publisher.publish(current_price, ts)
 
 if __name__ == "__main__":
     asyncio.run(InferenceRunner().run())
